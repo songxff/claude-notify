@@ -1,0 +1,4 @@
+# 运行期产物 / 备份,不应入库
+*.log
+*.bak-*
+settings.json.bak-*

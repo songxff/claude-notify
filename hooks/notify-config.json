@@ -1,0 +1,17 @@
+{
+  "webhook": {
+    "enabled": false,
+    "type": "bark",
+    "url": "",
+    "events": ["Notification", "Permission"],
+    "_说明": {
+      "enabled": "改为 true 才会把通知推送到手机/远程",
+      "type": "取值之一: bark / ntfy / dingtalk / custom",
+      "url_bark": "Bark(iOS 推送): 填基址,如 https://api.day.app/你的KEY",
+      "url_ntfy": "ntfy(跨平台): 填主题地址,如 https://ntfy.sh/你的主题名",
+      "url_dingtalk": "钉钉群机器人 Webhook 完整地址;机器人安全设置用关键词模式,关键词设为 Claude",
+      "url_custom": "任意地址,会收到 POST application/json: {title, message, event, project}",
+      "events": "哪些事件推送到远程,可选 Stop / Notification / Permission;默认只推需要你处理的两类,避免每次回复都震手机"
+    }
+  }
+}
