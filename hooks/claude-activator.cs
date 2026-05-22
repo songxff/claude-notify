@@ -73,25 +73,27 @@ public static class ClaudeActivator
             uint myThread = GetCurrentThreadId();
             uint targetThread = GetWindowThreadProcessId(hwnd, IntPtr.Zero);
 
-            // 防闪烁关键:受保护系统 UI(操作中心 / 通知横幅)占前台时附着不上,
-            // 此时绝不碰目标窗口,只静静等待;直到出现可附着的普通前台窗口,
-            // 才一次性切换 -> 屏幕上只有一次干净的切换动作,不会上下抖。
-            for (int i = 0; i < 50; i++)
+            // 本进程由通知平台经协议拉起,持有真正的前台授权,故每轮都直接尝试切换;
+            // attach 当前前台线程只是锦上添花(失败也照切,不设硬门槛——硬门槛会在
+            // 操作中心等受保护 UI 长时间占前台时一次都不尝试、直接放弃)。受保护 UI
+            // 占前台时 SetForegroundWindow 自然不生效(目标窗口也不会闪),继续轮询
+            // 等它收起即可。预算约 10 秒,足够等操作中心退场。
+            IntPtr lastFg = IntPtr.Zero;
+            int lastLogged = -99;
+            for (int i = 0; i < 60; i++)
             {
                 IntPtr fg = GetForegroundWindow();
-                if (fg == hwnd) { Log("focus OK (already foreground)"); return; }
+                lastFg = fg;
+                if (fg == hwnd) { Log("focus OK (already foreground) try#" + i); return; }
 
                 uint fgThread = (fg != IntPtr.Zero) ? GetWindowThreadProcessId(fg, IntPtr.Zero) : 0;
-                if (fgThread == 0 || fgThread == myThread) { Thread.Sleep(70); continue; }
-
-                // 附着不上 = 前台是受保护系统 UI,等它让位,期间一动不动
-                if (!AttachThreadInput(myThread, fgThread, true)) { Thread.Sleep(70); continue; }
-
+                bool aFg = (fgThread != 0 && fgThread != myThread)
+                           && AttachThreadInput(myThread, fgThread, true);
                 bool aTg = (targetThread != 0 && targetThread != myThread && targetThread != fgThread)
                            && AttachThreadInput(myThread, targetThread, true);
                 try
                 {
-                    keybd_event(0x12, 0, 0, IntPtr.Zero);   // ALT 轻点
+                    keybd_event(0x12, 0, 0, IntPtr.Zero);   // ALT 轻点,解锁前台
                     keybd_event(0x12, 0, 2, IntPtr.Zero);
                     if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE); else ShowWindow(hwnd, SW_SHOW);
                     BringWindowToTop(hwnd);
@@ -100,17 +102,25 @@ public static class ClaudeActivator
                 }
                 finally
                 {
-                    AttachThreadInput(myThread, fgThread, false);
+                    if (aFg) AttachThreadInput(myThread, fgThread, false);
                     if (aTg) AttachThreadInput(myThread, targetThread, false);
                 }
-                Thread.Sleep(130);
+                Thread.Sleep(110);
                 IntPtr now = GetForegroundWindow();
-                Log("activated fg-was=0x" + fg.ToInt64().ToString("X") +
-                    " now=0x" + now.ToInt64().ToString("X"));
-                if (now == hwnd) { Log("focus OK"); return; }
-                Thread.Sleep(80);
+                if (now == hwnd)
+                {
+                    Log("focus OK try#" + i + " fg-was=0x" + fg.ToInt64().ToString("X"));
+                    return;
+                }
+                // 节流日志:每 ~1.5 秒记一行被挡的前台,既能事后诊断又不刷屏
+                if (i - lastLogged >= 9)
+                {
+                    Log("try#" + i + " blocked fg=0x" + fg.ToInt64().ToString("X") + " attach=" + aFg);
+                    lastLogged = i;
+                }
+                Thread.Sleep(60);
             }
-            Log("focus gave up");
+            Log("focus gave up, last fg=0x" + lastFg.ToInt64().ToString("X"));
         }
         catch (Exception ex) { Log("focus error: " + ex.Message); }
     }
