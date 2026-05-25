@@ -10,8 +10,10 @@
 // 编译:csc /target:winexe /out:claude-activator.exe claude-activator.cs
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 
 public static class ClaudeActivator
@@ -24,6 +26,8 @@ public static class ClaudeActivator
     [DllImport("user32.dll")] static extern void keybd_event(byte k, byte s, uint f, IntPtr e);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
     [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint act, uint p, IntPtr pv, uint wini);
     [DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr h, bool fAltTab);
@@ -42,11 +46,37 @@ public static class ClaudeActivator
         catch { }
     }
 
+    // 诊断用:把窗口句柄描述成 "0xHEX[proc:'name' '截断后的标题']" 形式。
+    // 失败/句柄死时也始终返回字符串,绝不抛(切窗循环里再忙也不能让日志拖崩流程)。
+    public static string Desc(IntPtr h)
+    {
+        if (h == IntPtr.Zero) return "0x0";
+        string hex = "0x" + h.ToInt64().ToString("X");
+        if (!IsWindow(h)) return hex + "[dead]";
+        string proc = "?";
+        string title = "";
+        try
+        {
+            uint pid = 0;
+            GetWindowThreadProcessId(h, out pid);
+            if (pid != 0)
+            {
+                try { proc = Process.GetProcessById((int)pid).ProcessName; } catch { }
+            }
+            StringBuilder sb = new StringBuilder(256);
+            GetWindowText(h, sb, sb.Capacity);
+            title = sb.ToString();
+            if (title.Length > 60) title = title.Substring(0, 57) + "...";
+        }
+        catch { }
+        return hex + "[" + proc + " '" + title + "']";
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
         string argLine = (args != null && args.Length > 0) ? string.Join(" ", args) : "";
-        Log("launched args=" + argLine);
+        Log("launched args=" + argLine + " fg-at-launch=" + Desc(GetForegroundWindow()));
         // 等弹窗横幅的收起动画(约 100ms);从"操作中心"面板点则靠下面的轮询等它自行收起
         try { Thread.Sleep(120); } catch { }
         Focus(argLine);
@@ -66,6 +96,7 @@ public static class ClaudeActivator
             if (digits.Length == 0 || !long.TryParse(digits, out hv)) { Log("bad hwnd"); return; }
             IntPtr hwnd = new IntPtr(hv);
             if (!IsWindow(hwnd)) { Log("hwnd not a live window: " + hv); return; }
+            Log("target=" + Desc(hwnd));
 
             // 关掉前台锁超时,放行 SetForegroundWindow
             try { SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, IntPtr.Zero, 0); } catch { }
@@ -78,13 +109,18 @@ public static class ClaudeActivator
             // 操作中心等受保护 UI 长时间占前台时一次都不尝试、直接放弃)。受保护 UI
             // 占前台时 SetForegroundWindow 自然不生效(目标窗口也不会闪),继续轮询
             // 等它收起即可。预算约 10 秒,足够等操作中心退场。
+            // lastFg 跟踪"上一轮看到的拦截者",便于"已在前台"分支交代是谁让位的。
             IntPtr lastFg = IntPtr.Zero;
             int lastLogged = -99;
             for (int i = 0; i < 60; i++)
             {
                 IntPtr fg = GetForegroundWindow();
+                if (fg == hwnd)
+                {
+                    Log("focus OK (already foreground) try#" + i + " prev-blocker=" + Desc(lastFg));
+                    return;
+                }
                 lastFg = fg;
-                if (fg == hwnd) { Log("focus OK (already foreground) try#" + i); return; }
 
                 uint fgThread = (fg != IntPtr.Zero) ? GetWindowThreadProcessId(fg, IntPtr.Zero) : 0;
                 bool aFg = (fgThread != 0 && fgThread != myThread)
@@ -109,18 +145,18 @@ public static class ClaudeActivator
                 IntPtr now = GetForegroundWindow();
                 if (now == hwnd)
                 {
-                    Log("focus OK try#" + i + " fg-was=0x" + fg.ToInt64().ToString("X"));
+                    Log("focus OK try#" + i + " fg-was=" + Desc(fg));
                     return;
                 }
                 // 节流日志:每 ~1.5 秒记一行被挡的前台,既能事后诊断又不刷屏
                 if (i - lastLogged >= 9)
                 {
-                    Log("try#" + i + " blocked fg=0x" + fg.ToInt64().ToString("X") + " attach=" + aFg);
+                    Log("try#" + i + " blocked fg=" + Desc(fg) + " attach=" + aFg);
                     lastLogged = i;
                 }
                 Thread.Sleep(60);
             }
-            Log("focus gave up, last fg=0x" + lastFg.ToInt64().ToString("X"));
+            Log("focus gave up, last fg=" + Desc(lastFg));
         }
         catch (Exception ex) { Log("focus error: " + ex.Message); }
     }
