@@ -31,10 +31,26 @@ public static class ClaudeActivator
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
     [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint act, uint p, IntPtr pv, uint wini);
     [DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr h, bool fAltTab);
+    [DllImport("user32.dll")] static extern bool SetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+
+    // WINDOWPLACEMENT: 44 字节固定布局,worker 端 base64 后塞进 toast URL 的 &p= 段。
+    // 字段顺序必须与 Win32 头文件一致,否则 PtrToStructure 反序列化会错位。
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X; public int Y; }
+    [StructLayout(LayoutKind.Sequential)] struct RECT  { public int L; public int T; public int R; public int B; }
+    [StructLayout(LayoutKind.Sequential)] struct WINDOWPLACEMENT {
+        public int length;
+        public int flags;
+        public int showCmd;
+        public POINT minPos;
+        public POINT maxPos;
+        public RECT  normal;
+    }
 
     const uint SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
     const int SW_SHOW = 5, SW_RESTORE = 9;
+    const int SW_SHOWNORMAL = 1, SW_SHOWMINIMIZED = 2, SW_SHOWMAXIMIZED = 3;
+    const int WPF_RESTORETOMAXIMIZED = 0x0002;
 
     public static void Log(string m)
     {
@@ -98,6 +114,13 @@ public static class ClaudeActivator
             if (!IsWindow(hwnd)) { Log("hwnd not a live window: " + hv); return; }
             Log("target=" + Desc(hwnd));
 
+            // 解析可选 &p= 段(WINDOWPLACEMENT 快照)。切窗成功后据此严格还原原先的
+            // showCmd/位置——避免"切回前台"过程顺手把最大化窗口降级成普通窗口。
+            // 老版本(升级前)挂在操作中心里的 toast 不带 &p=,自然进降级路径,
+            // 只做切前台、不动布局,保证 100% 向后兼容。
+            WINDOWPLACEMENT place;
+            bool hasPlace = TryParsePlacement(invokedArgs, out place);
+
             // 关掉前台锁超时,放行 SetForegroundWindow
             try { SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, IntPtr.Zero, 0); } catch { }
 
@@ -118,6 +141,7 @@ public static class ClaudeActivator
                 if (fg == hwnd)
                 {
                     Log("focus OK (already foreground) try#" + i + " prev-blocker=" + Desc(lastFg));
+                    TryRestorePlacement(hwnd, hasPlace, ref place);
                     return;
                 }
                 lastFg = fg;
@@ -146,6 +170,7 @@ public static class ClaudeActivator
                 if (now == hwnd)
                 {
                     Log("focus OK try#" + i + " fg-was=" + Desc(fg));
+                    TryRestorePlacement(hwnd, hasPlace, ref place);
                     return;
                 }
                 // 节流日志:每 ~1.5 秒记一行被挡的前台,既能事后诊断又不刷屏
@@ -159,5 +184,57 @@ public static class ClaudeActivator
             Log("focus gave up, last fg=" + Desc(lastFg));
         }
         catch (Exception ex) { Log("focus error: " + ex.Message); }
+    }
+
+    // 从 invokedArgs 解析可选 &p=<base64> 段成 WINDOWPLACEMENT。
+    // 任何异常都吞掉返回 false,确保还原失败不影响切窗主流程。
+    static bool TryParsePlacement(string args, out WINDOWPLACEMENT wp)
+    {
+        wp = default(WINDOWPLACEMENT);
+        if (args == null) { return false; }
+        int idx = args.IndexOf("&p=");
+        if (idx < 0) { Log("no placement param"); return false; }
+        string p64 = args.Substring(idx + 3);
+        try
+        {
+            byte[] bytes = Convert.FromBase64String(p64);
+            if (bytes.Length != 44) { Log("place malformed len=" + bytes.Length); return false; }
+            IntPtr ptr = Marshal.AllocHGlobal(44);
+            try
+            {
+                Marshal.Copy(bytes, 0, ptr, 44);
+                wp = (WINDOWPLACEMENT)Marshal.PtrToStructure(ptr, typeof(WINDOWPLACEMENT));
+            }
+            finally { Marshal.FreeHGlobal(ptr); }
+
+            // 抓快照那一刻窗口若处于最小化(showCmd=SW_SHOWMINIMIZED),严格还原 =
+            // 点 toast 切回去还是最小化,看不到窗口,违背点击的初衷。所以重写为它
+            // "非最小化时"的状态:flags 里 WPF_RESTORETOMAXIMIZED 置位 -> 还原成最大化,
+            // 否则还原成普通窗口。"原先是什么样"取的是用户上次主动选择的窗口形态,
+            // 而非"刚好被最小化"的中间状态。
+            if (wp.showCmd == SW_SHOWMINIMIZED)
+            {
+                wp.showCmd = ((wp.flags & WPF_RESTORETOMAXIMIZED) != 0) ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+            }
+            Log("place parsed showCmd=" + wp.showCmd + " rc=(" + wp.normal.L + "," + wp.normal.T + "," + wp.normal.R + "," + wp.normal.B + ")");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log("place parse failed: " + ex.Message);
+            return false;
+        }
+    }
+
+    // 切窗成功后调用;hasPlace=false 时直接返回,保留旧的"只切前台"行为以兼容老 toast。
+    static void TryRestorePlacement(IntPtr hwnd, bool hasPlace, ref WINDOWPLACEMENT wp)
+    {
+        if (!hasPlace) { return; }
+        try
+        {
+            if (SetWindowPlacement(hwnd, ref wp)) { Log("place restored showCmd=" + wp.showCmd); }
+            else { Log("place restore failed: SetWindowPlacement returned false"); }
+        }
+        catch (Exception ex) { Log("place restore exception: " + ex.Message); }
     }
 }

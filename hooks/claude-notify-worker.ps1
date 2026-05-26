@@ -103,6 +103,39 @@ if ($Hwnd -ne 0) {
     } catch {}
 }
 
+# ---- 4b. 抓窗口快照 (WINDOWPLACEMENT 44 字节 -> base64 -> 塞进 toast launch URL)----
+# 用户点 toast 时,activator 据此 SetWindowPlacement 严格还原原先的 showCmd / 位置,
+# 不让"切回前台"过程顺手把最大化窗口降级成普通窗口。
+$placeB64 = ''
+if ($Hwnd -ne 0) {
+    try {
+        Add-Type -Name Wp -Namespace CCN -ErrorAction SilentlyContinue -MemberDefinition `
+            '[DllImport("user32.dll")] public static extern bool GetWindowPlacement(IntPtr h, IntPtr p);'
+        $size = 44
+        $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($size)
+        try {
+            # length 字段必须先填,否则 GetWindowPlacement 返回 false
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($ptr, 0, $size)
+            if ([CCN.Wp]::GetWindowPlacement([IntPtr]$Hwnd, $ptr)) {
+                $bytes = New-Object byte[] $size
+                [System.Runtime.InteropServices.Marshal]::Copy($ptr, $bytes, 0, $size)
+                $placeB64 = [Convert]::ToBase64String($bytes)
+                # 诊断日志:还原时和这条对比能定位是抓得不对还是还原没生效
+                $sc = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, 8)
+                $rL = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, 28)
+                $rT = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, 32)
+                $rR = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, 36)
+                $rB = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr, 40)
+                Write-Log "placement showCmd=$sc rc=($rL,$rT,$rR,$rB)"
+            } else {
+                Write-Log 'placement GetWindowPlacement returned false'
+            }
+        } finally { [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr) }
+    } catch {
+        Write-Log ('placement capture failed: ' + $_.Exception.Message)
+    }
+}
+
 # ---- 5. 弹 Windows 系统通知(WinRT Toast,可点击跳转 + 同类去重)----
 try {
     [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
@@ -121,9 +154,12 @@ try {
     $actionsXml = ''
     if ($Hwnd -ne 0) {
         $arg = 'claude-jump:focus?hwnd=' + $Hwnd
-        $launchAttr = ' launch="' + $arg + '" activationType="protocol"'
+        if ($placeB64) { $arg += '&p=' + $placeB64 }
+        # & 在 XML 属性里必须实体化;Windows 协议拉起时会自动 XML 反实体化为裸串
+        $argXml = $arg.Replace('&','&amp;')
+        $launchAttr = ' launch="' + $argXml + '" activationType="protocol"'
         $actionsXml = '<actions><action content="切换到终端" activationType="protocol" arguments="' +
-                      $arg + '"/></actions>'
+                      $argXml + '"/></actions>'
     }
     $xml = '<toast' + $launchAttr + '><visual><binding template="ToastGeneric">' +
            '<text>' + $tEsc + '</text><text>' + $bEsc + '</text>' +
