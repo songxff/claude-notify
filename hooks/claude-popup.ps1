@@ -27,6 +27,18 @@ function FromB64([string]$s) {
 $Title = FromB64 $TitleB64
 $Body  = FromB64 $BodyB64
 
+# 不透明渲染开关。某些显示环境(无物理显示器 / 部分远程镜像工具)下，分层透明窗
+# (AllowsTransparency=true 的逐像素 alpha)会被渲染成全透明 = 隐形。把 notify-config.json 的
+# "opaque" 置 true 即改用不透明窗:纯色背景 + 卡片铺满 + HRGN 硬裁圆角，不依赖 alpha 合成。
+$Opaque = $false
+try {
+    $cfgPathO = Join-Path $PSScriptRoot 'notify-config.json'
+    if (Test-Path -LiteralPath $cfgPathO) {
+        $cfgO = Get-Content -LiteralPath $cfgPathO -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $cfgO.opaque) { $Opaque = [bool]$cfgO.opaque }
+    }
+} catch {}
+
 # ---------------------------------------------------------------- 程序集 / P-Invoke
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -139,18 +151,29 @@ function Invoke-Jump {
 
 # ---------------------------------------------------------------- 构建窗口 / 卡片
 $win = New-Object Windows.Window
-$win.WindowStyle='None'; $win.AllowsTransparency=$true; $win.Background=[Windows.Media.Brushes]::Transparent
+$win.WindowStyle='None'
+if ($Opaque) {
+    # 不透明窗:背景用主题底色的不透明版(强制 alpha=255)，避免黑边/透不出来；圆角靠 HRGN 裁剪
+    $win.AllowsTransparency=$false
+    $wbg = MkBrush $th.bg $accent
+    if ($wbg -is [Windows.Media.SolidColorBrush]) { $wc=$wbg.Color; $wc.A=255; $wbg=[Windows.Media.SolidColorBrush]::new($wc) }
+    $win.Background=$wbg
+} else {
+    $win.AllowsTransparency=$true; $win.Background=[Windows.Media.Brushes]::Transparent
+}
 $win.Topmost=$true; $win.ShowInTaskbar=$false; $win.ShowActivated=$false; $win.ResizeMode='NoResize'
 $win.SizeToContent='Height'; $win.Width=360; $win.FontFamily=FF $th.fn
 
-$MARGIN = 18
+# 不透明窗:去掉透明外边距，卡片铺满整窗，圆角交给 HRGN 裁剪(CornerRadius 归 0)
+$MARGIN = if ($Opaque) { 0 } else { 18 }
 $card = New-Object Windows.Controls.Border
-$card.CornerRadius=[Windows.CornerRadius]::new([double]$th.cr)
+$card.CornerRadius=[Windows.CornerRadius]::new($(if($Opaque){0.0}else{[double]$th.cr}))
 $card.Background=MkBrush $th.bg $accent
 $card.Margin=[Windows.Thickness]::new($MARGIN)
 $card.Padding=[Windows.Thickness]::new(15,14,15,14)
 $card.Cursor='Hand'
 if ($th.bw -gt 0) { $card.BorderThickness=[Windows.Thickness]::new([double]$th.bw); $card.BorderBrush=MkBrush $th.bd $accent }
+elseif ($Opaque)  { $card.BorderThickness=[Windows.Thickness]::new(1); $card.BorderBrush=MkBrush $th.bd $accent }
 
 # 投影 / 发光 / 硬投影
 $fx = New-Object Windows.Media.Effects.DropShadowEffect
@@ -164,7 +187,7 @@ if ($th.hard) {
 } else {
     $fx.Color=(Col '#000000'); $fx.BlurRadius=30; $fx.ShadowDepth=11; $fx.Direction=270; $fx.Opacity=0.5
 }
-$card.Effect=$fx
+if (-not $Opaque) { $card.Effect=$fx }   # 柔性投影/发光依赖窗体透明，不透明窗里会变成实心涂抹，跳过
 
 $rootG = New-Object Windows.Controls.Grid
 $titleText = if ($th.upper) { $Title.ToUpper() } else { $Title }
@@ -283,6 +306,7 @@ $script:closing=$false
 function Close-Fade {
     if ($script:closing) { return }
     $script:closing=$true
+    if ($Opaque) { try { $win.Close() } catch {}; return }   # 不透明窗不能动画 Opacity，直接关
     $fo=New-Object Windows.Media.Animation.DoubleAnimation 1,0,([Windows.Duration]::new([TimeSpan]::FromMilliseconds(220)))
     $fo.add_Completed({ try { $win.Close() } catch {} })
     $win.BeginAnimation([Windows.Window]::OpacityProperty,$fo)
@@ -319,15 +343,21 @@ $win.add_Loaded({
         $wa=[System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
         $tr=$m.Transform([Windows.Point]::new($wa.Right,$wa.Top))
         $slot=Claim-Slot
-        $win.Left=$tr.X - $win.ActualWidth
-        $win.Top =$tr.Y + ($slot * ($win.ActualHeight + 6))
+        # 不透明窗没有内透明边距，定位时主动留出与屏幕上/右边缘的间距，避免贴边。
+        # (圆角不裁:不透明窗的硬裁圆角必然有锯齿，故用直角 + 边框，零锯齿。)
+        $edge = if ($Opaque) { 16.0 } else { 0.0 }
+        $win.Left=$tr.X - $win.ActualWidth - $edge
+        $win.Top =$tr.Y + $edge + ($slot * ($win.ActualHeight + 6))
     } catch { Write-Log ('place failed: ' + $_.Exception.Message) }
-    $tx=New-Object Windows.Media.TranslateTransform; $tx.X=46; $card.RenderTransform=$tx
-    $ax=New-Object Windows.Media.Animation.DoubleAnimation 46,0,([Windows.Duration]::new([TimeSpan]::FromMilliseconds(440)))
-    $ax.EasingFunction=(New-Object Windows.Media.Animation.CubicEase -Property @{EasingMode='EaseOut'})
-    $tx.BeginAnimation([Windows.Media.TranslateTransform]::XProperty,$ax)
-    $ao=New-Object Windows.Media.Animation.DoubleAnimation 0,1,([Windows.Duration]::new([TimeSpan]::FromMilliseconds(320)))
-    $win.BeginAnimation([Windows.Window]::OpacityProperty,$ao)
+    if (-not $Opaque) {
+        # 入场:右滑 + 淡入。都依赖窗体透明(TranslateTransform 留白透出 + Opacity 动画)，不透明窗里跳过，直接显示。
+        $tx=New-Object Windows.Media.TranslateTransform; $tx.X=46; $card.RenderTransform=$tx
+        $ax=New-Object Windows.Media.Animation.DoubleAnimation 46,0,([Windows.Duration]::new([TimeSpan]::FromMilliseconds(440)))
+        $ax.EasingFunction=(New-Object Windows.Media.Animation.CubicEase -Property @{EasingMode='EaseOut'})
+        $tx.BeginAnimation([Windows.Media.TranslateTransform]::XProperty,$ax)
+        $ao=New-Object Windows.Media.Animation.DoubleAnimation 0,1,([Windows.Duration]::new([TimeSpan]::FromMilliseconds(320)))
+        $win.BeginAnimation([Windows.Window]::OpacityProperty,$ao)
+    }
 
     if ($CaptureTo) {
         $script:cap=New-Object Windows.Threading.DispatcherTimer

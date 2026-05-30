@@ -66,6 +66,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 
 20 套主题键:`term` `claude` `glass` `aurora` `brutal` `neu` `cyber` `paper` `mac` `md` `frost` `holo` `line` `pixel` `grad` `clay` `code` `accent` `ambient` `strip`。改完保存即生效,无需重装。完整对照见 [`hooks/通知系统.md`](hooks/通知系统.md) 第七章。
 
+### 看不到自绘弹窗?打开不透明模式
+
+少数显示环境(**没接物理显示器的主机、部分远程镜像/串流工具**)下,默认的自绘弹窗是**分层透明窗**,会被合成成全透明 —— 窗口其实弹出来了(系统也认为它可见),但肉眼看是隐形的。
+
+把 `notify-config.json` 的 `opaque` 改成 `true` 即可:改用**不透明窗**(纯色背景 + 直角 + 细边框 + 离屏幕边缘留白),在这类环境下也能正常看见。代价是失去透明柔影 / 玻璃质感。显示器正常的用户保持默认 `false` 即可。
+
+```jsonc
+{ "style": "term", "opaque": true }
+```
+
+> 仅对自绘弹窗(`style` 非 `system`)生效;系统 Toast(`style:"system"`)本就是原生通知,不受影响、最稳妥。
+
 ## ⚙️ 远程推送配置
 
 安装后编辑 `用户目录\.claude\hooks\notify-config.json`,把 `enabled` 改为 `true` 并填好地址即可把通知转发到手机。支持 `bark` / `ntfy` / `dingtalk` / `serverchan`(Server酱) / `custom`,字段说明见 [`hooks/通知系统.md`](hooks/通知系统.md) 第七章。
