@@ -36,7 +36,7 @@ if (-not (Test-Path -LiteralPath $srcHooks)) {
 # ---- 1. 复制 hook 文件 ----
 Step "复制 hook 文件 -> $dstHooks"
 New-Item -ItemType Directory -Force -Path $dstHooks | Out-Null
-$codeFiles = @('claude-notify.ps1','claude-notify-worker.ps1','claude-activator.exe','claude-activator.cs','通知系统.md')
+$codeFiles = @('claude-notify.ps1','claude-notify-worker.ps1','claude-popup.ps1','claude-activator.exe','claude-activator.cs','通知系统.md')
 foreach ($f in $codeFiles) {
     $s = Join-Path $srcHooks $f
     if (Test-Path -LiteralPath $s) {

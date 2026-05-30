@@ -136,8 +136,35 @@ if ($Hwnd -ne 0) {
     }
 }
 
-# ---- 5. 弹 Windows 系统通知(WinRT Toast,可点击跳转 + 同类去重)----
+# ---- 5. 选择通知载体:notify-config.json 的 style 决定走系统 Toast 还是自绘弹窗 ----
+$style = 'system'
 try {
+    $cfgPath0 = Join-Path $PSScriptRoot 'notify-config.json'
+    if (Test-Path -LiteralPath $cfgPath0) {
+        $conf0 = Get-Content -LiteralPath $cfgPath0 -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($conf0.style) { $style = ('' + $conf0.style).Trim() }
+    }
+} catch {}
+$validThemes = @('term','claude','glass','aurora','brutal','neu','cyber','paper','mac','md','frost','holo','line','pixel','grad','clay','code','accent','ambient','strip')
+
+if ($style -ne 'system' -and ($validThemes -contains $style)) {
+    # ---- 5a. 自绘图形弹窗(claude-popup.ps1,右上角滑入,点击切回终端)----
+    try {
+        $popupPs1 = Join-Path $PSScriptRoot 'claude-popup.ps1'
+        $tB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($title))
+        $bB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($summary))
+        $pargs = @('-NoProfile','-ExecutionPolicy','Bypass','-Sta','-WindowStyle','Hidden','-File',$popupPs1,
+                   '-Event',$Event,'-Theme',$style,'-TitleB64',$tB64,'-BodyB64',$bB64,'-Hwnd',"$Hwnd")
+        if ($placeB64) { $pargs += @('-Place',$placeB64) }
+        Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $pargs
+        Write-Log "popup launched (theme=$style)"
+    } catch {
+        Write-Log ('popup failed: ' + $_.Exception.Message)
+        try { [Console]::Beep(880,220) } catch {}
+    }
+} else {
+    # ---- 5b. Windows 系统通知(WinRT Toast,可点击跳转 + 同类去重)----
+    try {
     [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
     [Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
     [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
@@ -174,10 +201,11 @@ try {
     $toast.Group = 'claude-code'
     [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
     Write-Log "toast shown (hwnd=$Hwnd)"
-} catch {
-    Write-Log ('toast failed: ' + $_.Exception.Message)
-    try { [Console]::Beep(880, 220) } catch {}
-}
+    } catch {
+        Write-Log ('toast failed: ' + $_.Exception.Message)
+        try { [Console]::Beep(880, 220) } catch {}
+    }
+}  # end else (system toast)
 
 # ---- 6. webhook 远程推送(可选,配置见同目录 notify-config.json)----
 try {
@@ -206,6 +234,13 @@ try {
                     Invoke-RestMethod -Uri $wh.url -Method Post -TimeoutSec 10 `
                         -ContentType 'application/json' `
                         -Body ([Text.Encoding]::UTF8.GetBytes($j)) | Out-Null
+                }
+                'serverchan' {
+                    # Server酱: POST title + desp(正文,支持 Markdown)。
+                    # 用 form-urlencoded + 哈希表 body,Invoke-RestMethod 自己按 UTF-8 编码,中文不乱码。
+                    $scBody = @{ title = $title; desp = $summary }
+                    Invoke-RestMethod -Uri $wh.url -Method Post -TimeoutSec 10 `
+                        -Body $scBody -ContentType 'application/x-www-form-urlencoded' | Out-Null
                 }
                 default {
                     $j = @{ title = $title; message = $summary; event = $Event; project = $project } |

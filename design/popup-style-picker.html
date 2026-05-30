@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>claude-notify · 弹窗样式选择器</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=VT323&display=swap');
+
+:root{
+  --ui:'Outfit',"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+  --mono:'JetBrains Mono',"Cascadia Code","Microsoft YaHei",monospace;
+  --serif:'Fraunces',"Songti SC","SimSun",Georgia,serif;
+  --display:'Bricolage Grotesque',"PingFang SC","Microsoft YaHei",sans-serif;
+  --space:'Space Mono',"Microsoft YaHei",monospace;
+  --ink:#e9e6df;
+  --bg:#0c0d12;
+  --evc:#34d399;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--ui);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, #1a1d2b 0%, transparent 55%),
+    radial-gradient(900px 500px at 0% 10%, #18221f 0%, transparent 50%),
+    var(--bg);
+  color:var(--ink);
+  min-height:100vh;
+  padding-bottom:120px;
+}
+/* grain */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:blur(16px) saturate(140%);
+  background:linear-gradient(180deg, rgba(12,13,18,.92), rgba(12,13,18,.65));
+  border-bottom:1px solid rgba(255,255,255,.07);
+  padding:18px clamp(18px,4vw,52px);
+  display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.brand .mark{
+  font-family:var(--display);font-weight:800;font-size:23px;letter-spacing:-.02em;
+  background:linear-gradient(92deg,#ff8a4c,#e8633a 55%,#d7385e);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.brand .sub{font-size:13px;color:#8c93a3;font-weight:400}
+.brand .sub b{color:#c3a;color:#d8b08c;font-weight:600}
+
+.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.seg{
+  display:inline-flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
+  border-radius:12px;padding:4px;gap:2px;
+}
+.seg button{
+  font-family:var(--ui);font-size:13px;font-weight:500;color:#9aa0ad;
+  background:transparent;border:0;cursor:pointer;padding:7px 14px;border-radius:9px;
+  display:flex;align-items:center;gap:7px;transition:.18s;white-space:nowrap;
+}
+.seg button .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.85}
+.seg button[data-ev="done"]{--c:#34d399}
+.seg button[data-ev="waiting"]{--c:#fbbf24}
+.seg button[data-ev="permission"]{--c:#fb7185}
+.seg button.on{background:rgba(255,255,255,.1);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.06) inset}
+.seg button.on .dot{color:var(--c);box-shadow:0 0 10px var(--c)}
+.seg button:hover{color:#d6dae2}
+
+.hint{font-size:12px;color:#6f7585;max-width:230px;line-height:1.4}
+
+/* ---------- grid ---------- */
+.grid{
+  display:grid;gap:26px;padding:30px clamp(18px,4vw,52px);
+  grid-template-columns:repeat(auto-fill,minmax(380px,1fr));
+}
+.stage{
+  position:relative;border-radius:18px;overflow:hidden;cursor:pointer;
+  aspect-ratio:16/10;min-height:240px;
+  border:1px solid rgba(255,255,255,.06);
+  box-shadow:0 14px 40px -18px rgba(0,0,0,.7);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s, border-color .25s;
+  isolation:isolate;
+}
+.stage:hover{transform:translateY(-4px);box-shadow:0 26px 60px -22px rgba(0,0,0,.8)}
+.stage.sel{border-color:#e8633a;box-shadow:0 0 0 2px #e8633a, 0 26px 60px -20px rgba(232,99,58,.45)}
+/* faux desktop wallpaper so glass / blur reads correctly */
+.wall{
+  position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(at 22% 18%, #3b4b66 0, transparent 48%),
+    radial-gradient(at 82% 6%, #5a3f5e 0, transparent 46%),
+    radial-gradient(at 64% 88%, #2c5450 0, transparent 50%),
+    radial-gradient(at 8% 92%, #4a3b4d 0, transparent 45%),
+    linear-gradient(135deg,#222a38,#2b2533);
+}
+.wall::after{
+  content:"";position:absolute;inset:0;opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.06) 1px, transparent 1.4px);
+  background-size:22px 22px;
+}
+.stage:nth-child(3n) .wall{filter:hue-rotate(24deg)}
+.stage:nth-child(3n+1) .wall{filter:hue-rotate(-20deg)}
+
+.tag{
+  position:absolute;left:14px;top:13px;z-index:5;
+  display:flex;align-items:center;gap:9px;
+  font-size:12px;color:#cfd4de;text-shadow:0 1px 4px rgba(0,0,0,.6);
+}
+.tag b{
+  font-family:var(--display);font-weight:800;font-size:14px;color:#fff;
+  background:rgba(0,0,0,.4);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.18);border-radius:8px;
+  width:30px;height:30px;display:grid;place-items:center;
+}
+.tag .nm{font-weight:600;color:#fff}
+.tag .ds{color:#aab0bd;font-size:11px}
+.stage.sel .tag b{background:#e8633a;border-color:#ff9c6e}
+
+/* selection check */
+.stage .check{
+  position:absolute;right:12px;bottom:12px;z-index:6;
+  width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  background:#e8633a;color:#fff;font-size:14px;font-weight:700;
+  transform:scale(0);transition:transform .2s cubic-bezier(.2,1.5,.4,1);
+  box-shadow:0 4px 14px rgba(232,99,58,.6);
+}
+.stage.sel .check{transform:scale(1)}
+
+/* ---------- base popup ---------- */
+.popup{
+  position:absolute;top:16px;right:16px;z-index:4;width:300px;
+  padding:14px 15px;border-radius:14px;
+  background:#1c1f27;color:#eef;
+  box-shadow:0 20px 44px -16px rgba(0,0,0,.7);
+  display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+  font-family:var(--ui);line-height:1.4;
+  animation:pop .55s cubic-bezier(.2,.85,.25,1) both;
+  animation-delay:calc(var(--i,0)*45ms + .1s);
+}
+@keyframes pop{from{opacity:0;transform:translateX(26px) scale(.96)}to{opacity:1;transform:none}}
+.stage:hover .popup{transform:translateY(-2px);transition:transform .2s}
+.popup .bar{display:none}
+.popup .ico{
+  width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:color-mix(in srgb, var(--evc) 22%, transparent);
+  color:var(--evc);font-size:16px;font-weight:700;
+}
+.popup .main{min-width:0}
+.popup .row1{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.popup .title{font-size:12.5px;font-weight:600;color:inherit;opacity:.92;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.popup .close{
+  flex:none;border:0;background:transparent;color:inherit;opacity:.4;cursor:pointer;
+  font-size:13px;line-height:1;padding:2px;border-radius:5px;transition:.15s;
+}
+.popup .close:hover{opacity:.9;background:rgba(255,255,255,.1)}
+.popup .body{font-size:15px;font-weight:700;margin-top:3px;letter-spacing:-.01em}
+.popup .preview{font-size:12px;opacity:.62;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.popup .meta{display:flex;align-items:center;justify-content:space-between;margin-top:11px;gap:10px}
+.popup .act{font-size:12px;font-weight:600;color:var(--evc);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.popup .act::after{content:"→";font-weight:700;transition:transform .2s}
+.stage:hover .popup .act::after{transform:translateX(3px)}
+.popup .time{font-size:11px;opacity:.4;white-space:nowrap}
+
+/* =================================================================
+   01 · Terminal Green  — CRT 终端，等宽荧光
+================================================================= */
+.popup--term{
+  background:#04080a;color:#5dff86;border-radius:6px;font-family:var(--mono);
+  border:1px solid #14401f;box-shadow:0 0 0 1px #0a1f10, 0 18px 40px -14px #000, 0 0 30px -6px rgba(40,255,110,.25);
+  overflow:hidden;
+}
+.popup--term::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:6px;
+  background:repeating-linear-gradient(0deg, rgba(0,255,120,.05) 0 1px, transparent 1px 3px)}
+.popup--term .ico{background:#08220f;color:#6dff96;border:1px solid #1c5630;border-radius:4px;text-shadow:0 0 8px #4dff84}
+.popup--term .title{color:#3fae5e;text-transform:uppercase;letter-spacing:.12em;font-size:10.5px}
+.popup--term .body{color:#7dffa0;text-shadow:0 0 10px rgba(70,255,130,.5);font-weight:700}
+.popup--term .preview{color:#3c9a57;opacity:.85}
+.popup--term .act{color:#9dffb8}
+.popup--term .act::before{content:"› "}
+.popup--term .act::after{content:"_";animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.popup--term .close{color:#3fae5e}
+
+/* =================================================================
+   02 · Claude Terracotta — 暖纸 + 赤陶火花，克制精致
+================================================================= */
+.popup--claude{
+  background:linear-gradient(180deg,#fbf7f0,#f3ece1);color:#3a322b;border-radius:17px;
+  border:1px solid #e8ddcb;box-shadow:0 22px 50px -20px rgba(120,70,40,.45);padding:15px 16px;
+}
+.popup--claude .ico{background:radial-gradient(circle at 35% 30%,#ef8a5c,#d7542f);color:#fff;border-radius:50%;
+  box-shadow:0 6px 16px -4px rgba(215,84,47,.6)}
+.popup--claude .title{color:#9a7f63;font-weight:600}
+.popup--claude .body{color:#2c241d;font-weight:700;font-size:15.5px}
+.popup--claude .preview{color:#7c6a58;opacity:.9}
+.popup--claude .act{color:#fff;background:linear-gradient(95deg,#ef7e4f,#d7542f);padding:6px 13px;border-radius:999px;
+  box-shadow:0 6px 14px -5px rgba(215,84,47,.7)}
+.popup--claude .act::after{color:#fff}
+.popup--claude .close{color:#b5a08c}
+.popup--claude .time{color:#a99883}
+
+/* =================================================================
+   03 · Midnight Glass — 暗色毛玻璃
+================================================================= */
+.popup--glass{
+  background:rgba(22,26,34,.55);backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  border:1px solid rgba(255,255,255,.14);border-radius:16px;color:#eef1f6;
+  box-shadow:0 24px 50px -18px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.16);
+}
+.popup--glass .ico{background:rgba(255,255,255,.1);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.16)}
+.popup--glass .title{color:#c8cfdb}
+
+/* =================================================================
+   04 · Aurora — 极光渐变发光玻璃
+================================================================= */
+.popup--aurora{
+  background:rgba(16,18,30,.5);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-radius:18px;color:#f0f1fb;border:1px solid rgba(255,255,255,.16);overflow:hidden;
+  box-shadow:0 24px 56px -18px rgba(0,0,0,.6);
+}
+.popup--aurora::before{content:"";position:absolute;inset:-40%;z-index:-1;filter:blur(34px);opacity:.85;
+  background:
+    radial-gradient(circle at 20% 30%, #5b8cff 0, transparent 38%),
+    radial-gradient(circle at 78% 20%, #ff5bd5 0, transparent 36%),
+    radial-gradient(circle at 60% 90%, #34e3c2 0, transparent 40%);
+  animation:aur 9s ease-in-out infinite alternate}
+@keyframes aur{to{transform:translate3d(-6%,4%,0) rotate(8deg)}}
+.popup--aurora .ico{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.22)}
+.popup--aurora .title{color:#d6dcff}
+.popup--aurora .act{color:#fff}
+
+/* =================================================================
+   05 · Brutalist Mono — 粗黑边 + 硬投影
+================================================================= */
+.popup--brutal{
+  background:#fff;color:#000;border:3px solid #000;border-radius:0;
+  box-shadow:7px 7px 0 #000;font-family:var(--display);padding:14px 15px;
+}
+.popup--brutal .ico{background:#000;color:#fff;border-radius:0;font-weight:800}
+.popup--brutal .title{color:#000;text-transform:uppercase;font-weight:800;letter-spacing:.02em;font-size:11px}
+.popup--brutal .body{font-weight:800;font-size:17px;letter-spacing:-.02em}
+.popup--brutal .preview{color:#333;opacity:1;font-weight:500}
+.popup--brutal .act{color:#000;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:2px;font-weight:800;text-transform:uppercase}
+.popup--brutal .act::after{content:"►"}
+.popup--brutal .close{color:#000;opacity:1;font-weight:800}
+.popup--brutal .time{color:#000;opacity:.5}
+
+/* =================================================================
+   06 · Neumorphism — 浮雕柔影，单色
+================================================================= */
+.popup--neu{
+  background:#e4e8ef;color:#56607a;border-radius:22px;border:0;
+  box-shadow:10px 10px 22px #c0c5cf, -10px -10px 22px #ffffff;padding:16px 17px;
+}
+.popup--neu .ico{background:#e4e8ef;color:var(--evc);border-radius:50%;
+  box-shadow:inset 4px 4px 8px #c4c9d3, inset -4px -4px 8px #ffffff}
+.popup--neu .title{color:#8a93a8;font-weight:600}
+.popup--neu .body{color:#3f485e;font-weight:700}
+.popup--neu .preview{color:#7e879c}
+.popup--neu .act{color:#5566aa;background:#e4e8ef;padding:6px 13px;border-radius:999px;
+  box-shadow:4px 4px 9px #c4c9d3, -4px -4px 9px #ffffff}
+.popup--neu .close{color:#9aa2b4}
+
+/* =================================================================
+   07 · Cyberpunk Neon — 切角霓虹
+================================================================= */
+.popup--cyber{
+  background:#08080f;color:#d6f7ff;border-radius:0;font-family:var(--space);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+  border:1px solid #1a2b3a;
+  box-shadow:0 0 0 1px rgba(0,240,255,.25), 0 18px 40px -14px #000, 0 0 28px -8px rgba(0,240,255,.4);
+}
+.popup--cyber::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(#00f0ff,#ff2bd6)}
+.popup--cyber .ico{background:rgba(0,240,255,.1);color:#00f0ff;border:1px solid #00f0ff;border-radius:0}
+.popup--cyber .title{color:#ff4fe0;text-transform:uppercase;letter-spacing:.16em;font-size:10px;text-shadow:0 0 8px rgba(255,43,214,.7)}
+.popup--cyber .body{color:#eaffff;text-shadow:0 0 10px rgba(0,240,255,.5)}
+.popup--cyber .preview{color:#5fa9bf}
+.popup--cyber .act{color:#00f0ff;text-shadow:0 0 8px rgba(0,240,255,.6)}
+.popup--cyber .close{color:#ff2bd6}
+
+/* =================================================================
+   08 · Paper Editorial — 杂志衬线
+================================================================= */
+.popup--paper{
+  background:#f4eee1;color:#241f18;border-radius:3px;padding:15px 17px;
+  border:1px solid #d9cfb8;box-shadow:0 18px 42px -18px rgba(60,45,25,.5);
+}
+.popup--paper .ico{background:#241f18;color:#f4eee1;border-radius:2px;font-family:var(--serif)}
+.popup--paper .title{font-family:var(--serif);font-style:italic;color:#7a6e54;font-weight:600;font-size:13px}
+.popup--paper .body{font-family:var(--serif);font-weight:700;font-size:19px;letter-spacing:-.01em;border-bottom:1px solid #cfc3a8;padding-bottom:7px;margin-bottom:2px}
+.popup--paper .preview{color:#5d5340;font-size:12.5px}
+.popup--paper .act{font-family:var(--serif);font-style:italic;color:#9a3b1f;font-weight:600;font-size:13px}
+.popup--paper .time{font-family:var(--serif);font-style:italic;color:#9a9078}
+.popup--paper .close{color:#9a9078}
+
+/* =================================================================
+   09 · macOS Notification — 系统原生既视感
+================================================================= */
+.popup--mac{
+  background:rgba(247,247,250,.78);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
+  color:#1d1d1f;border-radius:18px;border:.5px solid rgba(0,0,0,.08);padding:12px 13px;
+  box-shadow:0 18px 44px -14px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.5);
+}
+.popup--mac .ico{width:38px;height:38px;border-radius:10px;background:linear-gradient(160deg,#ff9f6b,#e8633a);color:#fff;
+  box-shadow:0 4px 10px -3px rgba(232,99,58,.6)}
+.popup--mac .title{color:#1d1d1f;font-weight:600;font-size:13px}
+.popup--mac .body{font-weight:500;font-size:13px;margin-top:1px;color:#1d1d1f}
+.popup--mac .preview{color:#3c3c43;opacity:.65;font-size:12.5px}
+.popup--mac .act{color:#0a84ff;font-weight:500}
+.popup--mac .act::after{content:""}
+.popup--mac .time{color:#8a8a8e}
+.popup--mac .close{color:#8a8a8e}
+
+/* =================================================================
+   10 · Material You — M3 大圆角，色调表面
+================================================================= */
+.popup--md{
+  background:#ece6f0;color:#1d1b20;border-radius:26px;padding:16px 18px;border:0;
+  box-shadow:0 10px 30px -10px rgba(40,30,60,.35);
+}
+.popup--md .ico{width:40px;height:40px;border-radius:50%;background:#d0bcff;color:#381e72;font-size:18px}
+.popup--md .title{color:#49454f;font-weight:600;font-size:12px;letter-spacing:.02em}
+.popup--md .body{color:#1d1b20;font-weight:600;font-size:15px}
+.popup--md .preview{color:#49454f;opacity:.85}
+.popup--md .act{color:#4a4458;background:#e8def8;padding:8px 16px;border-radius:999px;font-weight:600}
+.popup--md .act::after{content:""}
+.popup--md .close{color:#605d66}
+
+/* =================================================================
+   11 · Frosted Light — 浅色毛玻璃 + 柔和粉彩
+================================================================= */
+.popup--frost{
+  background:rgba(255,255,255,.5);backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);
+  color:#2a2f3a;border-radius:18px;border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 18px 44px -16px rgba(60,80,140,.4), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.popup--frost .ico{background:rgba(122,167,255,.25);color:#3d6fd6;border:1px solid rgba(122,167,255,.4)}
+.popup--frost .title{color:#5a6275;font-weight:600}
+.popup--frost .body{color:#222733}
+.popup--frost .preview{color:#586073}
+.popup--frost .act{color:#3d6fd6}
+
+/* =================================================================
+   12 · Holographic — 虹彩流光描边
+================================================================= */
+.popup--holo{
+  background:#0d0d14;color:#eef;border-radius:16px;border:1px solid transparent;
+  background-image:linear-gradient(#0d0d14,#0d0d14),conic-gradient(from 0deg,#ff6ec4,#7873f5,#4ade80,#ffd86e,#ff6ec4);
+  background-origin:border-box;background-clip:padding-box,border-box;
+  box-shadow:0 18px 44px -16px rgba(0,0,0,.7);overflow:hidden;
+}
+.popup--holo::before{content:"";position:absolute;inset:0;opacity:.12;pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,#fff 48%,transparent 60%);
+  background-size:300% 100%;animation:holo 4.5s linear infinite}
+@keyframes holo{to{background-position:-200% 0}}
+.popup--holo .ico{background:conic-gradient(from 0deg,#ff6ec4,#7873f5,#4ade80,#ff6ec4);color:#0d0d14;font-weight:800}
+.popup--holo .title{background:linear-gradient(90deg,#ff6ec4,#7873f5);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}
+.popup--holo .body{color:#f2f3ff}
+.popup--holo .act{background:linear-gradient(90deg,#4ade80,#7873f5);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}
+.popup--holo .act::after{color:#7873f5}
+
+/* =================================================================
+   13 · Minimal Line — 极简描边，大量留白
+================================================================= */
+.popup--line{
+  background:#fcfcfa;color:#16120d;border-radius:11px;border:1px solid #e7e4dc;padding:16px 18px;
+  box-shadow:0 14px 36px -20px rgba(0,0,0,.4);
+}
+.popup--line .ico{width:8px;height:8px;border-radius:50%;background:var(--evc);align-self:center;box-shadow:0 0 0 4px color-mix(in srgb,var(--evc) 16%,transparent)}
+.popup--line .title{color:#8c887e;text-transform:uppercase;letter-spacing:.18em;font-size:10px;font-weight:600}
+.popup--line .body{font-weight:600;font-size:15px;color:#16120d;margin-top:5px}
+.popup--line .preview{color:#6d685f}
+.popup--line .meta{margin-top:13px;padding-top:11px;border-top:1px solid #eeebe3;border-top-color:#efece4}
+.popup--line .act{color:#16120d;font-weight:600}
+.popup--line .act::after{font-weight:400;opacity:.5}
+.popup--line .close{color:#b3afa5}
+.popup--line .time{color:#b3afa5}
+
+/* =================================================================
+   14 · Pixel 8-bit — 像素复古
+================================================================= */
+.popup--pixel{
+  background:#1a1c2c;color:#f4f4f4;border-radius:0;font-family:'VT323',var(--mono);
+  border:3px solid #f4f4f4;padding:12px 14px;
+  box-shadow:6px 6px 0 #000, 0 0 0 3px #29366f inset;image-rendering:pixelated;
+}
+.popup--pixel .ico{background:#29366f;color:#ffcd75;border:2px solid #f4f4f4;border-radius:0;font-size:20px;width:32px;height:32px}
+.popup--pixel .title{color:#94b0c2;text-transform:uppercase;letter-spacing:.1em;font-size:15px}
+.popup--pixel .body{font-size:22px;line-height:1;color:#41a6f6;font-weight:400;text-shadow:2px 2px 0 #000}
+.popup--pixel .preview{color:#c2c2d1;font-size:16px;line-height:1.1}
+.popup--pixel .act{color:#ffcd75;font-size:16px;letter-spacing:.05em}
+.popup--pixel .act::before{content:"["}
+.popup--pixel .act::after{content:"]";color:#ffcd75}
+.popup--pixel .close{color:#ef7d57;font-size:18px}
+.popup--pixel .time{font-size:14px;color:#566c86}
+
+/* =================================================================
+   15 · Gradient Bold — 落日渐变填充
+================================================================= */
+.popup--grad{
+  background:linear-gradient(125deg,#ff9a44,#ff5470 52%,#ff2e63);color:#fff;border-radius:18px;
+  box-shadow:0 22px 50px -18px rgba(255,70,110,.6);border:1px solid rgba(255,255,255,.25);overflow:hidden;
+}
+.popup--grad::before{content:"";position:absolute;top:-60%;right:-30%;width:70%;height:160%;
+  background:radial-gradient(circle,rgba(255,255,255,.35),transparent 60%);pointer-events:none}
+.popup--grad .ico{background:rgba(255,255,255,.22);color:#fff;border:1px solid rgba(255,255,255,.4)}
+.popup--grad .title{color:rgba(255,255,255,.88);font-weight:600}
+.popup--grad .body{color:#fff;font-weight:800}
+.popup--grad .preview{color:rgba(255,255,255,.85);opacity:1}
+.popup--grad .act{color:#ff2e63;background:#fff;padding:6px 13px;border-radius:999px;font-weight:700}
+.popup--grad .act::after{color:#ff2e63}
+.popup--grad .close{color:#fff;opacity:.8}
+.popup--grad .time{color:rgba(255,255,255,.75)}
+
+/* =================================================================
+   16 · Claymorphism — 黏土软糖
+================================================================= */
+.popup--clay{
+  background:#ffe8cf;color:#5b4636;border-radius:28px;padding:16px 18px;border:0;
+  box-shadow:0 16px 34px -12px rgba(180,120,80,.5), inset 6px 6px 12px rgba(255,255,255,.7), inset -6px -6px 12px rgba(200,150,110,.4);
+}
+.popup--clay .ico{width:40px;height:40px;border-radius:50%;background:#ff9eb1;color:#fff;font-size:18px;
+  box-shadow:inset 3px 3px 6px rgba(255,255,255,.6), inset -3px -3px 6px rgba(200,90,120,.5), 0 6px 12px -4px rgba(255,90,120,.5)}
+.popup--clay .title{color:#a3826a;font-weight:600}
+.popup--clay .body{color:#4a3527;font-weight:700}
+.popup--clay .preview{color:#8a6f5a}
+.popup--clay .act{color:#fff;background:#ff9eb1;padding:8px 15px;border-radius:999px;font-weight:700;
+  box-shadow:inset 2px 2px 5px rgba(255,255,255,.5), inset -2px -2px 5px rgba(200,90,120,.5), 0 5px 12px -4px rgba(255,90,120,.5)}
+.popup--clay .act::after{color:#fff}
+.popup--clay .close{color:#bfa28c}
+
+/* =================================================================
+   17 · Dev Editor — VS Code / Catppuccin
+================================================================= */
+.popup--code{
+  background:#181825;color:#cdd6f4;border-radius:9px;font-family:var(--mono);
+  border:1px solid #313244;padding:0;overflow:hidden;
+  box-shadow:0 20px 44px -16px rgba(0,0,0,.7);grid-template-columns:1fr;
+}
+.popup--code .bar{display:block;height:30px;background:#11111b;border-bottom:1px solid #313244;
+  align-items:center;padding:0 12px;color:#6c7086;font-size:11px;position:relative}
+.popup--code .bar::before{content:"● ● ●";position:absolute;left:12px;top:50%;transform:translateY(-50%);letter-spacing:3px;color:#45475a;font-size:9px}
+.popup--code .bar::after{content:"claude-notify.log";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;color:#7f849c}
+.popup--code .ico{display:none}
+.popup--code .main{padding:13px 15px}
+.popup--code .title{color:#89b4fa;font-weight:700}
+.popup--code .title::before{content:"› ";color:#a6e3a1}
+.popup--code .body{color:#f5e0dc;font-weight:700;font-size:15px}
+.popup--code .preview{color:#9399b2}
+.popup--code .act{color:#a6e3a1;font-weight:700}
+.popup--code .act::before{content:"▶ "}
+.popup--code .act::after{content:""}
+.popup--code .close{color:#f38ba8}
+.popup--code .time{color:#585b70}
+
+/* =================================================================
+   18 · Accent Bar — 左侧事件色条，干净克制
+================================================================= */
+.popup--accent{
+  background:#1b1f29;color:#e7ecf3;border-radius:12px;padding-left:18px;
+  border:1px solid #2a3140;box-shadow:0 18px 42px -16px rgba(0,0,0,.65);
+}
+.popup--accent .bar{display:block;position:absolute;left:0;top:10px;bottom:10px;width:5px;border-radius:999px;
+  background:var(--evc);box-shadow:0 0 14px -2px var(--evc)}
+.popup--accent .ico{background:color-mix(in srgb,var(--evc) 18%,transparent);color:var(--evc);border-radius:9px}
+.popup--accent .title{color:#9aa4b4}
+.popup--accent .body{color:#f2f5fa}
+.popup--accent .preview{color:#8b94a4}
+.popup--accent .act{color:var(--evc)}
+
+/* =================================================================
+   19 · Ambient Glow — 暗色环境光晕
+================================================================= */
+.popup--ambient{
+  background:#131219;color:#ecebf3;border-radius:20px;border:1px solid rgba(255,255,255,.06);
+  box-shadow:0 22px 50px -18px rgba(0,0,0,.75);overflow:hidden;
+}
+.popup--ambient::after{content:"";position:absolute;left:-20%;bottom:-60%;width:90%;height:140%;z-index:-1;
+  background:radial-gradient(circle,var(--evc),transparent 62%);opacity:.4;filter:blur(30px)}
+.popup--ambient .ico{background:color-mix(in srgb,var(--evc) 20%,transparent);color:var(--evc);
+  border:1px solid color-mix(in srgb,var(--evc) 35%,transparent);box-shadow:0 0 20px -6px var(--evc)}
+.popup--ambient .title{color:#a9a7bb}
+.popup--ambient .body{color:#fbfaff}
+.popup--ambient .preview{color:#8c8aa0}
+.popup--ambient .act{color:var(--evc);text-shadow:0 0 12px color-mix(in srgb,var(--evc) 60%,transparent)}
+
+/* =================================================================
+   20 · Toast Strip — 纤细单行胶囊
+================================================================= */
+.popup--strip{
+  top:18px;width:320px;padding:10px 12px;border-radius:14px;align-items:center;
+  background:rgba(24,26,34,.82);backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);
+  color:#eef;border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 16px 36px -14px rgba(0,0,0,.6);
+  grid-template-columns:auto 1fr auto;
+}
+.popup--strip .ico{width:30px;height:30px;border-radius:9px;font-size:14px}
+.popup--strip .row1{display:none}
+.popup--strip .body{font-size:13px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.popup--strip .preview{display:none}
+.popup--strip .meta{display:none}
+.popup--strip .stripact{
+  grid-column:3;flex:none;display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:600;color:var(--evc);background:color-mix(in srgb,var(--evc) 14%,transparent);
+  padding:6px 11px;border-radius:999px;white-space:nowrap;
+}
+.popup:not(.popup--strip) .stripact{display:none}
+
+/* ---------- selection footer ---------- */
+.footbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;
+  padding:14px clamp(18px,4vw,52px);
+  background:linear-gradient(0deg,rgba(12,13,18,.96),rgba(12,13,18,.7));
+  backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  transform:translateY(110%);transition:transform .35s cubic-bezier(.2,.9,.2,1);
+}
+.footbar.show{transform:none}
+.footbar .pick{display:flex;align-items:center;gap:13px;font-size:14px;color:#cfd4de}
+.footbar .pick .num{
+  font-family:var(--display);font-weight:800;font-size:16px;color:#fff;
+  background:linear-gradient(95deg,#ff8a4c,#d7385e);width:36px;height:36px;border-radius:10px;
+  display:grid;place-items:center;box-shadow:0 6px 16px -5px rgba(215,84,47,.7)}
+.footbar .pick b{color:#fff;font-weight:600}
+.footbar .pick span{color:#8c93a3}
+.footbar .copy{
+  font-family:var(--ui);font-size:13px;font-weight:600;color:#fff;cursor:pointer;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:9px 16px;transition:.18s}
+.footbar .copy:hover{background:rgba(255,255,255,.18)}
+
+.note{padding:0 clamp(18px,4vw,52px) 10px;color:#6f7585;font-size:12px;line-height:1.5;max-width:760px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">claude-notify</span>
+    <span class="sub">自绘弹窗 · 样式选择器　·　20 种风格，挑一个把<b>编号</b>告诉我</span>
+  </div>
+  <div class="controls">
+    <div class="seg" id="seg">
+      <button data-ev="done" class="on"><span class="dot"></span>完成</button>
+      <button data-ev="waiting"><span class="dot"></span>等待输入</button>
+      <button data-ev="permission"><span class="dot"></span>需要授权</button>
+    </div>
+    <div class="hint">每个弹窗都停在迷你桌面的右上角 —— 就是它真实出现的位置</div>
+  </div>
+</header>
+
+<p class="note">
+  下面 20 张是同一条通知的 20 种外观。顶部切换「完成 / 等待 / 授权」可看每种风格如何适配不同事件颜色与文案。
+  点任意卡片选中它，底部会显示编号。选定后我会用 WPF 把它 1:1 复刻（字体以 Windows 自带字体就近替代，毛玻璃/发光等效果均可实现）。
+</p>
+
+<main class="grid" id="grid"></main>
+
+<div class="footbar" id="footbar">
+  <div class="pick">
+    <span class="num" id="pickNum">–</span>
+    <div><b id="pickName">未选择</b> <span id="pickDesc"></span></div>
+  </div>
+  <button class="copy" id="copyBtn">复制选择</button>
+</div>
+
+<script>
+const styles = [
+  {key:'term',    name:'Terminal Green',  desc:'CRT 终端 · 等宽荧光'},
+  {key:'claude',  name:'Claude Terracotta',desc:'暖纸 · 赤陶火花'},
+  {key:'glass',   name:'Midnight Glass',  desc:'暗色毛玻璃'},
+  {key:'aurora',  name:'Aurora',          desc:'极光发光玻璃'},
+  {key:'brutal',  name:'Brutalist Mono',  desc:'粗黑边 · 硬投影'},
+  {key:'neu',     name:'Neumorphism',     desc:'浮雕柔影 · 单色'},
+  {key:'cyber',   name:'Cyberpunk Neon',  desc:'切角霓虹'},
+  {key:'paper',   name:'Paper Editorial', desc:'杂志衬线 · 油墨'},
+  {key:'mac',     name:'macOS Native',    desc:'系统原生既视感'},
+  {key:'md',      name:'Material You',    desc:'M3 大圆角 · 色调表面'},
+  {key:'frost',   name:'Frosted Light',   desc:'浅色毛玻璃 · 粉彩'},
+  {key:'holo',    name:'Holographic',     desc:'虹彩流光描边'},
+  {key:'line',    name:'Minimal Line',    desc:'极简描边 · 大留白'},
+  {key:'pixel',   name:'Pixel 8-bit',     desc:'像素复古'},
+  {key:'grad',    name:'Gradient Bold',   desc:'落日渐变填充'},
+  {key:'clay',    name:'Claymorphism',    desc:'黏土软糖'},
+  {key:'code',    name:'Dev Editor',      desc:'VS Code · 终端日志'},
+  {key:'accent',  name:'Accent Bar',      desc:'左侧事件色条'},
+  {key:'ambient', name:'Ambient Glow',    desc:'暗色环境光晕'},
+  {key:'strip',   name:'Toast Strip',     desc:'纤细单行胶囊'},
+];
+
+const events = {
+  done:       {c:'#34d399', ico:'✓',  title:'Claude Code · claude-notify',        body:'已完成回复',       prev:'本轮任务已结束，点我切回终端查看结果。', act:'切换到终端'},
+  waiting:    {c:'#fbbf24', ico:'…',  title:'Claude Code 在等你 · claude-notify', body:'正在等待你的输入', prev:'需要你确认下一步，点我切回终端继续。',   act:'切换到终端'},
+  permission: {c:'#fb7185', ico:'🔑', title:'Claude Code 需要授权 · claude-notify',body:'请求使用 Bash',   prev:'npm run build —— 点我切回终端批准或拒绝。', act:'切换到终端'},
+};
+
+let curEv = 'done';
+let selected = null;
+
+const grid = document.getElementById('grid');
+styles.forEach((s, i) => {
+  const stage = document.createElement('section');
+  stage.className = 'stage';
+  stage.dataset.idx = i;
+  const num = String(i + 1).padStart(2, '0');
+  stage.innerHTML = `
+    <div class="wall"></div>
+    <div class="tag"><b>${num}</b><span><span class="nm">${s.name}</span><br><span class="ds">${s.desc}</span></span></div>
+    <article class="popup popup--${s.key}" style="--i:${i}">
+      <span class="bar"></span>
+      <div class="ico"><span class="g"></span></div>
+      <div class="main">
+        <div class="row1"><h3 class="title"></h3><button class="close" title="关闭">✕</button></div>
+        <div class="body"></div>
+        <p class="preview"></p>
+        <div class="meta"><span class="act"></span><span class="time">刚刚</span></div>
+      </div>
+      <span class="stripact"></span>
+    </article>
+    <div class="check">✓</div>`;
+  stage.addEventListener('click', () => selectStage(i));
+  grid.appendChild(stage);
+});
+
+function applyEvent(ev){
+  curEv = ev;
+  const e = events[ev];
+  document.querySelectorAll('.popup').forEach(p => {
+    p.style.setProperty('--evc', e.c);
+    p.querySelector('.ico .g').textContent = e.ico;
+    p.querySelector('.title').textContent = e.title;
+    p.querySelector('.body').textContent = e.body;
+    p.querySelector('.preview').textContent = e.prev;
+    p.querySelector('.act').textContent = e.act;
+    p.querySelector('.stripact').textContent = e.act;
+  });
+  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.ev === ev));
+}
+
+document.getElementById('seg').addEventListener('click', ev => {
+  const btn = ev.target.closest('button');
+  if (btn) applyEvent(btn.dataset.ev);
+});
+
+function selectStage(i){
+  selected = i;
+  document.querySelectorAll('.stage').forEach((st, k) => st.classList.toggle('sel', k === i));
+  const s = styles[i];
+  document.getElementById('pickNum').textContent = String(i + 1).padStart(2, '0');
+  document.getElementById('pickName').textContent = s.name;
+  document.getElementById('pickDesc').textContent = '· ' + s.desc;
+  document.getElementById('footbar').classList.add('show');
+}
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  if (selected === null) return;
+  const s = styles[selected];
+  const txt = `我选 #${selected + 1} ${s.name}（${s.desc}）`;
+  navigator.clipboard?.writeText(txt);
+  const btn = document.getElementById('copyBtn');
+  btn.textContent = '已复制 ✓';
+  setTimeout(() => btn.textContent = '复制选择', 1500);
+});
+
+applyEvent('done');
+</script>
+</body>
+</html>

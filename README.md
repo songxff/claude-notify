@@ -1,6 +1,6 @@
 # Claude Code 桌面通知系统
 
-给 [Claude Code](https://claude.com/claude-code) 命令行版加一个 **Windows 桌面通知**功能:当 Claude 在后台运行(终端窗口不在最前)时,在关键时刻弹系统通知提醒你,**点通知即可一键切回终端**。
+给 [Claude Code](https://claude.com/claude-code) 命令行版加一个 **Windows 桌面通知**功能:当 Claude 在后台运行(终端窗口不在最前)时,在关键时刻弹通知提醒你,**点通知即可一键切回终端**。
 
 终端正在最前、你正盯着它时,**不打扰、不弹通知**。
 
@@ -12,10 +12,11 @@
   - ✅ 回复完成
   - ⌛ 空闲等待你输入
   - 🔐 需要你授权某个操作
-- **点击跳转** —— 点通知横幅或「切换到终端」按钮,自动把终端窗口切回最前
+- **两种界面(可选)** —— 默认 Windows 系统通知;也可换成屏幕右上角的**自绘弹窗**,20 套主题任选
+- **点击跳转** —— 点通知横幅 / 弹窗或「切换到终端」按钮,自动把终端窗口切回最前
 - **前台静默** —— 终端在最前时一律不弹,绝不打扰
 - **同类去重** —— 同类通知只保留最新一条,不在操作中心堆积
-- **远程推送(可选)** —— 可转发到手机:Bark / ntfy / 钉钉 / 自定义 webhook
+- **远程推送(可选)** —— 可转发到手机:Bark / ntfy / 钉钉 / Server酱 / 自定义 webhook
 - **无闪烁** —— 点击跳转由无控制台的 `winexe` 处理,不会黑窗一闪
 - 纯 `HKCU` + 用户目录,**不需要管理员权限**
 
@@ -49,25 +50,40 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 - 注册 `claude-jump:` 协议与通知应用身份(均 `HKCU`);
 - 尽量用本机 .NET 重新编译 `claude-activator.exe`。
 
+> 升级提示:安装器**不会覆盖**你已存在的 `notify-config.json`(保护你的样式 / 远程推送配置)。
+> 旧版配置若没有 `style` 字段,行为默认按系统通知(`system`),想用自绘弹窗手动加一行即可。
+
 ## 🗑️ 卸载
 
 双击 `卸载.bat`,或运行 `uninstall.ps1`,会移除全部改动(hook 条目 / 注册表 / 文件)。
 
+## 🎨 通知样式(系统通知 / 自绘弹窗)
+
+安装后编辑 `用户目录\.claude\hooks\notify-config.json` 的 `style` 字段:
+
+- `"system"`(默认)—— Windows 系统 Toast 通知;
+- 填某个**主题键** —— 改用屏幕右上角的自绘图形弹窗(约 8 秒自动消失、鼠标悬停暂停、点击切回终端)。
+
+20 套主题键:`term` `claude` `glass` `aurora` `brutal` `neu` `cyber` `paper` `mac` `md` `frost` `holo` `line` `pixel` `grad` `clay` `code` `accent` `ambient` `strip`。改完保存即生效,无需重装。完整对照见 [`hooks/通知系统.md`](hooks/通知系统.md) 第七章。
+
 ## ⚙️ 远程推送配置
 
-安装后编辑 `用户目录\.claude\hooks\notify-config.json`,把 `enabled` 改为 `true` 并填好地址即可把通知转发到手机。支持 `bark` / `ntfy` / `dingtalk` / `custom`,字段说明见 [`hooks/通知系统.md`](hooks/通知系统.md) 第七章。
+安装后编辑 `用户目录\.claude\hooks\notify-config.json`,把 `enabled` 改为 `true` 并填好地址即可把通知转发到手机。支持 `bark` / `ntfy` / `dingtalk` / `serverchan`(Server酱) / `custom`,字段说明见 [`hooks/通知系统.md`](hooks/通知系统.md) 第七章。
+
+> Server酱 地址形如 `https://<uid>.push.ft07.com/send/<sendkey>.send`,属你的私有凭据,**只填在本机配置里、不要提交进仓库**。
 
 ## 🔧 工作原理
 
 ```
 Claude Code 触发 hook
    └─> claude-notify.ps1        入口:定位终端窗口、派生后台 worker
-         └─> claude-notify-worker.ps1   组装内容、弹 WinRT Toast、可选推 webhook
+         └─> claude-notify-worker.ps1   组装内容、按 style 弹 Toast 或自绘弹窗、可选推 webhook
+               ├─> claude-popup.ps1       (style=主题键)屏幕右上角自绘弹窗
                └─> 用户点击 -> claude-jump: 协议
                      └─> claude-activator.exe   把终端窗口切回前台
 ```
 
-关键设计:点击跳转用 **`claude-jump:` 自定义协议**拉起一个一次性新进程。该进程因"由前台进程启动"而持有真正的 `SetForegroundWindow` 授权,能做真正的窗口激活;且编译为无控制台的 `winexe`,点击无闪烁。
+关键设计:点击跳转用 **`claude-jump:` 自定义协议**拉起一个一次性新进程。该进程因"由前台进程启动"而持有真正的 `SetForegroundWindow` 授权,能做真正的窗口激活;且编译为无控制台的 `winexe`,点击无闪烁。自绘弹窗本身就是被点击的前台窗口,点击时先 `AllowSetForegroundWindow` 再复用同一个 activator 完成切窗。
 
 完整技术文档见 [`hooks/通知系统.md`](hooks/通知系统.md)。
 
@@ -81,8 +97,9 @@ claude-notify/
 └─ hooks/                    被安装到 ~/.claude/hooks/ 的文件
    ├─ claude-notify.ps1          hook 入口脚本
    ├─ claude-notify-worker.ps1   后台 worker
+   ├─ claude-popup.ps1           自绘弹窗渲染器(20 主题)
    ├─ claude-activator.cs        点击跳转处理器源码
    ├─ claude-activator.exe       上面的预编译产物(winexe)
-   ├─ notify-config.json         远程推送配置
+   ├─ notify-config.json         通知界面 + 远程推送配置
    └─ 通知系统.md                完整技术文档
 ```

@@ -132,7 +132,7 @@ Ok "注册表已清理"
 # ---- 3. 删除 hook 文件 ----
 Step "删除 hook 文件"
 try { Get-Process claude-activator -ErrorAction SilentlyContinue | Stop-Process -Force } catch {}
-$files = @('claude-notify.ps1','claude-notify-worker.ps1','claude-activator.exe',
+$files = @('claude-notify.ps1','claude-notify-worker.ps1','claude-popup.ps1','claude-activator.exe',
           'claude-activator.cs','notify-config.json','通知系统.md')
 foreach ($f in $files) {
     $p = Join-Path $dstHooks $f

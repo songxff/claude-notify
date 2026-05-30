@@ -1,4 +1,5 @@
-{
+﻿{
+  "style": "system",
   "webhook": {
     "enabled": false,
     "type": "bark",
@@ -6,12 +7,41 @@
     "events": ["Notification", "Permission"],
     "_说明": {
       "enabled": "改为 true 才会把通知推送到手机/远程",
-      "type": "取值之一: bark / ntfy / dingtalk / custom",
+      "type": "取值之一: bark / ntfy / dingtalk / serverchan / custom",
       "url_bark": "Bark(iOS 推送): 填基址,如 https://api.day.app/你的KEY",
       "url_ntfy": "ntfy(跨平台): 填主题地址,如 https://ntfy.sh/你的主题名",
       "url_dingtalk": "钉钉群机器人 Webhook 完整地址;机器人安全设置用关键词模式,关键词设为 Claude",
+      "url_serverchan": "Server酱(微信/APP 推送): 填你的推送地址,形如 https://<uid>.push.ft07.com/send/<sendkey>.send(在 sc3.ft07.com 获取;属私有凭据,勿外泄、勿提交到仓库)",
       "url_custom": "任意地址,会收到 POST application/json: {title, message, event, project}",
       "events": "哪些事件推送到远程,可选 Stop / Notification / Permission;默认只推需要你处理的两类,避免每次回复都震手机"
     }
+  },
+  "_style_说明": {
+    "作用": "决定通知用哪种界面弹出。改完保存即可,下次通知生效,无需重装。",
+    "system": "(默认) Windows 系统 Toast 通知,沿用老行为",
+    "自绘弹窗": "把 style 改成下面任意一个主题键,即改用屏幕右上角的自绘图形弹窗(约8秒后自动消失,鼠标悬停暂停,点击切回终端)",
+    "主题键一览": {
+      "term": "01 Terminal Green · CRT 终端荧光",
+      "claude": "02 Claude Terracotta · 暖纸赤陶(品牌感)",
+      "glass": "03 Midnight Glass · 暗色毛玻璃",
+      "aurora": "04 Aurora · 极光发光玻璃",
+      "brutal": "05 Brutalist Mono · 粗黑边硬投影",
+      "neu": "06 Neumorphism · 浮雕柔影单色",
+      "cyber": "07 Cyberpunk Neon · 切角霓虹",
+      "paper": "08 Paper Editorial · 杂志衬线油墨",
+      "mac": "09 macOS Native · 系统原生既视感",
+      "md": "10 Material You · M3 大圆角",
+      "frost": "11 Frosted Light · 浅色毛玻璃粉彩",
+      "holo": "12 Holographic · 虹彩流光描边",
+      "line": "13 Minimal Line · 极简描边大留白",
+      "pixel": "14 Pixel 8-bit · 像素复古",
+      "grad": "15 Gradient Bold · 落日渐变填充",
+      "clay": "16 Claymorphism · 黏土软糖",
+      "code": "17 Dev Editor · VS Code 终端日志",
+      "accent": "18 Accent Bar · 左侧事件色条",
+      "ambient": "19 Ambient Glow · 暗色环境光晕",
+      "strip": "20 Toast Strip · 纤细单行胶囊"
+    },
+    "示例": "想用赛博霓虹就写: \"style\": \"cyber\"  ;想回到系统通知就写: \"style\": \"system\""
   }
 }

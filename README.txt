@@ -41,9 +41,17 @@
 【卸载】
   双击「卸载.bat」,会移除上面列出的全部改动。
 
+【可选:换通知样式(系统通知 / 自绘弹窗)】
+  安装后编辑   用户目录\.claude\hooks\notify-config.json  的 style 字段:
+    · "system"(默认) = Windows 系统通知;
+    · 填一个主题键    = 屏幕右上角的自绘弹窗(约 8 秒消失、悬停暂停、点击切回终端)。
+  20 套主题键:term claude glass aurora brutal neu cyber paper mac md
+              frost holo line pixel grad clay code accent ambient strip
+  改完保存即生效,无需重装。
+
 【可选:把通知转发到手机】
   安装后编辑   用户目录\.claude\hooks\notify-config.json
-  支持 Bark / ntfy / 钉钉 / 自定义 webhook,字段说明见同目录
+  支持 Bark / ntfy / 钉钉 / Server酱 / 自定义 webhook,字段说明见同目录
   「通知系统.md」第七章。
 
 【更多技术细节】
